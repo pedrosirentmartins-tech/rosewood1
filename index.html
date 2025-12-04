@@ -1,117 +1,208 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-br">
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Rosewood Medical Center</title>
-
-<!-- Firebase SDK (correto) -->
+<style>
+:root{--accent:#ff2b9e;}
+body{font-family:Arial;margin:0;background:#fff;}
+header{display:flex;align-items:center;gap:15px;padding:20px;border-bottom:1px solid #ddd;}
+header img{height:80px;}
+.wrap{max-width:1100px;margin:auto;padding:20px;}
+.grid{display:grid;grid-template-columns:1fr 420px;gap:20px;}
+.panel{background:#fff;padding:20px;border-radius:12px;box-shadow:0 0 10px rgba(0,0,0,.08);} 
+label{display:block;margin-top:10px;font-weight:bold;}
+input,select,textarea{width:100%;padding:10px;margin-top:4px;border:1px solid #ccc;border-radius:8px;}
+.row{display:flex;gap:10px;flex-wrap:wrap;}
+.row>div{flex:1;min-width:120px;}  
+button{background:var(--accent);color:#fff;border:none;padding:10px 16px;margin-top:15px;border-radius:8px;cursor:pointer;}
+.cards{display:grid;gap:12px;margin-top:10px;}
+.card{display:flex;gap:10px;padding:10px;border:1px solid #f2c;border-radius:10px;}
+.card img{width:70px;height:70px;object-fit:cover;border-radius:8px;}
+@media(max-width:900px){.grid{grid-template-columns:1fr;}}
+</style>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-
-<script>
-  // Configuração do Firebase
-  var firebaseConfig = {
-    apiKey: "AIzaSyBRFlVvCNQRj9QEQcfcTPWJVletd34vu2g",
-    authDomain: "rosewood-a17a5.firebaseapp.com",
-    databaseURL: "https://rosewood-a17a5-default-rtdb.firebaseio.com",
-    projectId: "rosewood-a17a5",
-    storageBucket: "rosewood-a17a5.firebasestorage.app",
-    messagingSenderId: "20548352872",
-    appId: "1:20548352872:web:c62d40e9dea3efbb80b4dd"
-  };
-
-  // Inicializar Firebase
-  firebase.initializeApp(firebaseConfig);
-
-  var database = firebase.database();
-</script>
-
-<style>
-body {font-family: Arial; background:#f5f5f5; margin:0}
-.container {display:flex; padding:30px; gap:20px}
-.card {background:#fff; padding:20px; border-radius:10px; width:50%}
-input, select, textarea {width:100%; padding:8px; margin-bottom:10px}
-button {padding:8px 12px; border:none; cursor:pointer}
-.save {background:#ff2f92;color:white}
-.delete {background:red;color:white}
-.item {border:1px solid #ccc; padding:10px;margin-bottom:10px}
-</style>
 </head>
-
 <body>
-
-<div class="container">
-
-<div class="card">
+<header>
+<img src="https://i.imgur.com/wv6Uhnk.png">
+<h1>Rosewood Medical Center</h1>
+</header>
+<div class="wrap">
+<div class="grid">
+<div class="panel">
 <h2>Novo cadastro</h2>
-<input id="nome" placeholder="Nome">
-<input id="cpf" placeholder="CPF">
-<input id="idade" placeholder="Idade">
-<input id="altura" placeholder="Altura">
-<select id="sangue">
-  <option value="">Tipo sanguíneo</option>
-  <option>A+</option><option>A-</option>
-  <option>B+</option><option>B-</option>
-  <option>O+</option><option>O-</option>
-  <option>AB+</option><option>AB-</option>
-</select>
-<textarea id="obs" placeholder="Observações"></textarea>
-<button class="save" onclick="salvar()">Salvar</button>
+<form id="form">
+<label>Nome</label><input id="nome" required>
+<label>CPF (sem limite)</label><input id="cpf">
+<div class="row">
+<div><label>Idade</label><input type="number" id="idade"></div>
+<div><label>Altura</label><input id="altura"></div>
+<div><label>Tipo Sanguíneo</label><select id="sangue"><option></option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
 </div>
-
-<div class="card">
+<label>Observações</label><textarea id="obs"></textarea>
+<label>Foto</label><input type="file" id="foto" accept="image/*">
+<button id="salvarBtn" type="submit">Salvar</button> <button type="button" id="cancelarEdit" style="display:none;background:#999">Cancelar edição</button> <button type="button" id="apagarTudo" style="background:#ccc;color:#000">Apagar todos</button>
+</form>
+</div>
+<div class="panel">
 <h2>Banco de dados</h2>
-<input oninput="buscar(this.value)" placeholder="Buscar por nome ou CPF">
-<div id="lista"></div>
+<input id="buscar" placeholder="Buscar por nome ou CPF" onkeyup="render()" style="margin-bottom:10px;width:100%;padding:8px;border-radius:8px;border:1px solid #ccc">
+<button type="button" onclick="exportarExcel()">Exportar Excel</button>
+<div id="cards" class="cards"></div>
 </div>
-
 </div>
-
+</div>
 <script>
-function salvar(){
-  let dados = {
-    nome: nome.value,
-    cpf: cpf.value,
-    idade: idade.value,
-    altura: altura.value,
-    sangue: sangue.value,
-    obs: obs.value
-  };
+let editarId = null;
 
-  database.ref("cadastros").push(dados);
+// FIREBASE CONFIG
+const firebaseConfig = {
+  apiKey: "AIzaSyBRFlVvCNQRj9QEQcfcTPWJVletd34vu2g",
+  authDomain: "rosewood-a17a5.firebaseapp.com",
+  databaseURL: "https://rosewood-a17a5-default-rtdb.firebaseio.com",
+  projectId: "rosewood-a17a5",
+  storageBucket: "rosewood-a17a5.firebasestorage.app",
+  messagingSenderId: "20548352872",
+  appId: "1:20548352872:web:c62d40e9dea3efbb80b4dd"
+};
 
-  nome.value=""; cpf.value=""; idade.value=""; altura.value=""; sangue.value=""; obs.value="";
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+const form = document.getElementById('form');
+const salvarBtn = document.getElementById('salvarBtn');
+const cancelarEdit = document.getElementById('cancelarEdit');
+
+// RENDER
+function render(){
+  let q = (document.getElementById('buscar')?.value || '').toLowerCase();
+  let area = document.getElementById('cards');
+  area.innerHTML = '';
+
+  db.ref('cadastros').once('value', snap => {
+    let dados = snap.val() || {};
+
+    Object.values(dados)
+      .filter(p => (p.nome || '').toLowerCase().includes(q) || (p.cpf || '').toLowerCase().includes(q))
+      .forEach(p => {
+        let c = document.createElement('div');
+        c.className = 'card';
+        c.innerHTML = `
+          ${p.foto ? `<img src="${p.foto}">` : ''}
+          <div style="flex:1">
+            <b>${p.nome || ''}</b><br>
+            CPF: ${p.cpf || ''}<br>
+            Idade: ${p.idade || ''}<br>
+            Altura: ${p.altura || ''}<br>
+            Sangue: ${p.sangue || ''}
+            ${p.obs ? `<div style="margin-top:6px">${p.obs}</div>` : ''}
+            <div style="margin-top:8px">
+              <button onclick="editar('${p.id}')">Editar</button>
+              <button onclick="apagar('${p.id}')" style="background:#f44;color:white">Apagar</button>
+            </div>
+          </div>`;
+        area.appendChild(c);
+      });
+  });
 }
 
-database.ref("cadastros").on("value", function(snapshot){
-  let html="";
-  snapshot.forEach(function(item){
-    let d = item.val();
-    html += `
-      <div class="item">
-        <b>${d.nome}</b><br>
-        CPF: ${d.cpf} <br>
-        Idade: ${d.idade} | Altura: ${d.altura} <br>
-        Sangue: ${d.sangue}<br>
-        <button class="delete" onclick="apagar('${item.key}')">Apagar</button>
-      </div>
-    `;
-  });
-  lista.innerHTML = html;
-});
+// EDITAR
+function editar(id){
+  db.ref('cadastros/' + id).once('value', snap => {
+    let p = snap.val();
+    if(!p) return;
 
+    nome.value = p.nome;
+    cpf.value = p.cpf;
+    idade.value = p.idade;
+    altura.value = p.altura;
+    sangue.value = p.sangue;
+    obs.value = p.obs;
+
+    editarId = id;
+    salvarBtn.textContent = 'Salvar alteração';
+    cancelarEdit.style.display = 'inline-block';
+    window.scrollTo({top:0,behavior:'smooth'});
+  });
+}
+
+cancelarEdit.onclick = () => {
+  form.reset();
+  editarId = null;
+  cancelarEdit.style.display = 'none';
+  salvarBtn.textContent = 'Salvar';
+};
+
+// APAGAR
 function apagar(id){
-  database.ref("cadastros/"+id).remove();
+  if(confirm('Deseja apagar este cadastro?')){
+    db.ref('cadastros/' + id).remove();
+    render();
+  }
 }
 
-function buscar(txt){
-  txt = txt.toLowerCase();
-  let itens = document.querySelectorAll(".item");
-  itens.forEach(i=>{
-    i.style.display = i.innerText.toLowerCase().includes(txt) ? "block" : "none";
+// APAGAR TODOS
+document.getElementById('apagarTudo').onclick = () => {
+  if(confirm('Deseja apagar TODOS os cadastros?')){
+    db.ref('cadastros').remove();
+    render();
+  }
+};
+
+// SALVAR
+form.onsubmit = function(e){
+  e.preventDefault();
+  let file = foto.files[0];
+  let reader = new FileReader();
+
+  function salvar(img){
+    let data = {
+      id: editarId || Date.now().toString(),
+      nome: nome.value,
+      cpf: cpf.value,
+      idade: idade.value,
+      altura: altura.value,
+      sangue: sangue.value,
+      obs: obs.value,
+      foto: img || ''
+    };
+
+    db.ref('cadastros/' + data.id).set(data);
+    form.reset();
+    cancelarEdit.style.display = 'none';
+    salvarBtn.textContent = 'Salvar';
+    editarId = null;
+    render();
+  }
+
+  if(file){
+    reader.onload = () => salvar(reader.result);
+    reader.readAsDataURL(file);
+  } else salvar('');
+};
+
+// EXPORTAR
+function exportarExcel(){
+  db.ref('cadastros').once('value', snap => {
+    let dados = Object.values(snap.val() || {});
+
+    let tabela = '<table border=1><tr><th>Nome</th><th>CPF</th><th>Idade</th><th>Altura</th><th>Sangue</th><th>Obs</th></tr>';
+    dados.forEach(p=>{
+      tabela += `<tr><td>${p.nome||''}</td><td>${p.cpf||''}</td><td>${p.idade||''}</td><td>${p.altura||''}</td><td>${p.sangue||''}</td><td>${p.obs||''}</td></tr>`;
+    });
+    tabela += '</table>';
+
+    let a = document.createElement('a');
+    a.href = 'data:application/vnd.ms-excel,' + encodeURIComponent(tabela);
+    a.download = 'backup.xls';
+    a.click();
   });
 }
-</script>
 
-</body>
-</html>
+render();
+</script>
+</body></html>
+
