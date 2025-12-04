@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rosewood Medical Center</title>
+<style>
+:root{--accent:#ff2b9e;}
+body{font-family:Arial;margin:0;background:#fff;}
+header{display:flex;align-items:center;gap:15px;padding:20px;border-bottom:1px solid #ddd;}
+header img{height:80px;}
+.wrap{max-width:1100px;margin:auto;padding:20px;}
+.grid{display:grid;grid-template-columns:1fr 420px;gap:20px;}
+.panel{background:#fff;padding:20px;border-radius:12px;box-shadow:0 0 10px rgba(0,0,0,.08);} 
+label{display:block;margin-top:10px;font-weight:bold;}
+input,select,textarea{width:100%;padding:10px;margin-top:4px;border:1px solid #ccc;border-radius:8px;}
+.row{display:flex;gap:10px;flex-wrap:wrap;}
+.row>div{flex:1;min-width:120px;}  
+button{background:var(--accent);color:#fff;border:none;padding:10px 16px;margin-top:15px;border-radius:8px;cursor:pointer;}
+.cards{display:grid;gap:12px;margin-top:10px;}
+.card{display:flex;gap:10px;padding:10px;border:1px solid #f2c;border-radius:10px;}
+.card img{width:70px;height:70px;object-fit:cover;border-radius:8px;}
+@media(max-width:900px){.grid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<header>
+<img src="https://i.imgur.com/wv6Uhnk.png">
+<h1>Rosewood Medical Center</h1>
+</header>
+<div class="wrap">
+<div class="grid">
+<div class="panel">
+<h2>Novo cadastro</h2>
+<form id="form">
+<label>Nome</label><input id="nome" required>
+<label>CPF (sem limite)</label><input id="cpf">
+<div class="row">
+<div><label>Idade</label><input type="number" id="idade"></div>
+<div><label>Altura</label><input id="altura"></div>
+<div><label>Tipo Sanguíneo</label><select id="sangue"><option></option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
+</div>
+<label>Observações</label><textarea id="obs"></textarea>
+<label>Foto</label><input type="file" id="foto" accept="image/*">
+<button id="salvarBtn" type="submit">Salvar</button> <button type="button" id="cancelarEdit" style="display:none;background:#999">Cancelar edição</button> <button type="button" id="apagarTudo" style="background:#ccc;color:#000">Apagar todos</button>
+</form>
+</div>
+<div class="panel">
+<h2>Banco de dados</h2>
+<input id="buscar" placeholder="Buscar por nome ou CPF" onkeyup="render()" style="margin-bottom:10px;width:100%;padding:8px;border-radius:8px;border:1px solid #ccc">
+<button type="button" onclick="exportarExcel()">Exportar Excel</button>
+<div id="cards" class="cards"></div>
+</div>
+</div>
+</div>
+<script>
+let editarId = null;
+const STORAGE = "rosewood";
+
+function render(){
+  let dados = JSON.parse(localStorage.getItem(STORAGE)||"[]");
+  let q = (document.getElementById('buscar')?.value || "").toLowerCase();
+  let area = document.getElementById("cards");
+  area.innerHTML = "";
+
+  dados.filter(p => (p.nome||"").toLowerCase().includes(q) || (p.cpf||"").toLowerCase().includes(q))
+  .forEach(p=>{
+    let c = document.createElement("div");
+    c.className = "card";
+    c.innerHTML = `
+      ${p.foto ? `<img src="${p.foto}">` : ""}
+      <div style="flex:1">
+        <b>${p.nome||""}</b><br>
+        CPF: ${p.cpf||""}<br>
+        Idade: ${p.idade||""}<br>
+        Altura: ${p.altura||""}<br>
+        Sangue: ${p.sangue||""}
+        ${p.obs ? `<div style="margin-top:6px">${p.obs}</div>` : ""}
+        <div style="margin-top:8px">
+          <button onclick="editar('${p.id}')">Editar</button>
+          <button onclick="apagar('${p.id}')" style="background:#f44;color:white">Apagar</button>
+        </div>
+      </div>`;
+    area.appendChild(c);
+  });
+}
+
+render();
+
+function editar(id){
+  let dados = JSON.parse(localStorage.getItem(STORAGE)||"[]");
+  let p = dados.find(x=>x.id==id);
+  if(!p) return;
+  nome.value = p.nome;
+  cpf.value = p.cpf;
+  idade.value = p.idade;
+  altura.value = p.altura;
+  sangue.value = p.sangue;
+  obs.value = p.obs;
+  editarId = id;
+  salvarBtn.textContent = "Salvar alteração";
+  cancelarEdit.style.display = "inline-block";
+}
+
+cancelarEdit.onclick = ()=>{
+  form.reset();
+  editarId = null;
+  cancelarEdit.style.display = "none";
+  salvarBtn.textContent = "Salvar";
+};
+
+function apagar(id){
+  let dados = JSON.parse(localStorage.getItem(STORAGE)||"[]");
+  dados = dados.filter(p=>p.id!=id);
+  localStorage.setItem(STORAGE, JSON.stringify(dados));
+  render();
+}
+
+document.getElementById("apagarTudo").onclick = function(){
+ if(confirm("Deseja apagar TODOS os cadastros?")){
+   localStorage.removeItem(STORAGE);
+   render();
+ }
+};
+
+form.onsubmit = function(e){
+  e.preventDefault();
+  let file = foto.files[0];
+  let reader = new FileReader();
+
+  function salvar(img){
+    let dados = JSON.parse(localStorage.getItem(STORAGE)||"[]");
+
+    if(editarId){
+      let i = dados.findIndex(x=>x.id==editarId);
+      dados[i] = {...dados[i],nome:nome.value,cpf:cpf.value,idade:idade.value,altura:altura.value,sangue:sangue.value,obs:obs.value,foto:img || dados[i].foto};
+      editarId = null;
+    } else {
+      dados.push({id:Date.now().toString(),nome:nome.value,cpf:cpf.value,idade:idade.value,altura:altura.value,sangue:sangue.value,obs:obs.value,foto:img});
+    }
+
+    localStorage.setItem(STORAGE, JSON.stringify(dados));
+    render();
+    form.reset();
+    cancelarEdit.style.display = "none";
+    salvarBtn.textContent = "Salvar";
+  }
+
+  if(file){ reader.onload = ()=>salvar(reader.result); reader.readAsDataURL(file); }
+  else salvar("");
+}
+
+function exportarExcel(){
+ let dados = JSON.parse(localStorage.getItem(STORAGE)||"[]");
+ let tabela = "<table border=1><tr><th>Nome</th><th>CPF</th><th>Idade</th><th>Altura</th><th>Sangue</th><th>Obs</th></tr>";
+ dados.forEach(p=>{
+   tabela += `<tr><td>${p.nome||""}</td><td>${p.cpf||""}</td><td>${p.idade||""}</td><td>${p.altura||""}</td><td>${p.sangue||""}</td><td>${p.obs||""}</td></tr>`;
+ });
+ tabela += "</table>";
+ let a = document.createElement("a");
+ a.href = "data:application/vnd.ms-excel," + encodeURIComponent(tabela);
+ a.download = "backup.xls";
+ a.click();
+}
+</script>
+</body></html>
