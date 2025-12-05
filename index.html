@@ -40,7 +40,13 @@ button{background:var(--accent);color:#fff;border:none;padding:10px 16px;margin-
 <div class="row">
 <div><label>Idade</label><input type="number" id="idade"></div>
 <div><label>Altura</label><input id="altura"></div>
-<div><label>Tipo Sanguíneo</label><select id="sangue"><option></option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
+<div><label>Tipo Sanguíneo</label><select id="sangue">
+<option></option>
+<option>A+</option>
+<option>A-</option>
+<option>B+</option>
+<option>B-</option>
+</select></div>
 </div>
 <label>Observações</label><textarea id="obs"></textarea>
 <label>Foto</label><input type="file" id="foto" accept="image/*">
@@ -55,154 +61,80 @@ button{background:var(--accent);color:#fff;border:none;padding:10px 16px;margin-
 </div>
 </div>
 </div>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
 <script>
-let editarId = null;
-
-// FIREBASE CONFIG
-const firebaseConfig = {
-  apiKey: "AIzaSyBRFlVvCNQRj9QEQcfcTPWJVletd34vu2g",
-  authDomain: "rosewood-a17a5.firebaseapp.com",
-  databaseURL: "https://rosewood-a17a5-default-rtdb.firebaseio.com",
-  projectId: "rosewood-a17a5",
-  storageBucket: "rosewood-a17a5.firebasestorage.app",
-  messagingSenderId: "20548352872",
-  appId: "1:20548352872:web:c62d40e9dea3efbb80b4dd"
-};
-
+// ===== FIREBASE CONFIG =====
+const firebaseConfig = {apiKey: "AIzaSyBRFlVvCNQRj9QEQcfcTPWJVletd34vu2g",authDomain: "rosewood-a17a5.firebaseapp.com",databaseURL: "https://rosewood-a17a5-default-rtdb.firebaseio.com",projectId: "rosewood-a17a5",storageBucket: "rosewood-a17a5.firebasestorage.app",messagingSenderId: "20548352872",appId: "1:20548352872:web:c62d40e9dea3efbb80b4dd"};
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
+const auth = firebase.auth();
 
-const form = document.getElementById('form');
-const salvarBtn = document.getElementById('salvarBtn');
-const cancelarEdit = document.getElementById('cancelarEdit');
+// ===== ADMIN LIST =====
+const ADMINS = ["admin@rosewood.com"];
+let usuario = null;
 
-// RENDER
+// ===== LOGIN UI =====
+document.body.insertAdjacentHTML("afterbegin",`
+<div id='loginBox' style="position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:999">
+  <div style='width:320px;padding:20px;border-radius:12px;box-shadow:0 0 10px rgba(0,0,0,.1)'>
+    <h3>Login</h3>
+    <input id='loginEmail' placeholder='Email' style='width:100%;margin-bottom:8px;padding:8px'>
+    <input id='loginSenha' type='password' placeholder='Senha' style='width:100%;margin-bottom:8px;padding:8px'>
+    <button onclick='entrar()' style='width:100%'>Entrar</button>
+    <button onclick='registrar()' style='width:100%;background:#666'>Registrar</button>
+    <div id='msgLogin' style='margin-top:8px;color:red'></div>
+  </div>
+</div>`);
+
+function entrar(){
+ let e=loginEmail.value, s=loginSenha.value;
+ auth.signInWithEmailAndPassword(e,s).catch(x=>msgLogin.innerText=x.message);
+}
+function registrar(){
+ let e=loginEmail.value, s=loginSenha.value;
+ auth.createUserWithEmailAndPassword(e,s).catch(x=>msgLogin.innerText=x.message);
+}
+
+// ===== PERMISSIONS =====
+auth.onAuthStateChanged(u=>{
+ if(!u) return;
+ usuario = u;
+ document.getElementById('loginBox').remove();
+ aplicarPermissoes();
+ render();
+});
+
+function aplicarPermissoes(){
+ let admin = ADMINS.includes(usuario.email);
+ document.getElementById('form').style.display = admin?'block':'none';
+ document.getElementById('apagarTudo').style.display = admin?'inline-block':'none';
+}
+
+// ===== RENDER =====
 function render(){
-  let q = (document.getElementById('buscar')?.value || '').toLowerCase();
-  let area = document.getElementById('cards');
-  area.innerHTML = '';
-
-  db.ref('cadastros').once('value', snap => {
-    let dados = snap.val() || {};
-
-    Object.values(dados)
-      .filter(p => (p.nome || '').toLowerCase().includes(q) || (p.cpf || '').toLowerCase().includes(q))
-      .forEach(p => {
-        let c = document.createElement('div');
-        c.className = 'card';
-        c.innerHTML = `
-          ${p.foto ? `<img src="${p.foto}">` : ''}
-          <div style="flex:1">
-            <b>${p.nome || ''}</b><br>
-            CPF: ${p.cpf || ''}<br>
-            Idade: ${p.idade || ''}<br>
-            Altura: ${p.altura || ''}<br>
-            Sangue: ${p.sangue || ''}
-            ${p.obs ? `<div style="margin-top:6px">${p.obs}</div>` : ''}
-            <div style="margin-top:8px">
-              <button onclick="editar('${p.id}')">Editar</button>
-              <button onclick="apagar('${p.id}')" style="background:#f44;color:white">Apagar</button>
-            </div>
-          </div>`;
-        area.appendChild(c);
-      });
+ let q = (buscar?.value||"").toLowerCase();
+ let area = cards; area.innerHTML='';
+ db.ref('cadastros').on('value',snap=>{
+  let dados = snap.val()||{};
+  Object.values(dados).filter(p=>(p.nome||"").toLowerCase().includes(q)||(p.cpf||"").toLowerCase().includes(q)).forEach(p=>{
+   let admin = ADMINS.includes(usuario.email);
+   let c=document.createElement('div'); c.className='card';
+   c.innerHTML=`${p.foto?`<img src='${p.foto}'>`:''}<div style='flex:1'><b>${p.nome}</b><br>CPF:${p.cpf}<br>Idade:${p.idade}<br>Altura:${p.altura}<br>Sangue:${p.sangue}${p.obs?`<div>${p.obs}</div>`:''}${admin?`<div><button onclick="editar('${p.id}')">Editar</button><button onclick="apagar('${p.id}')" style="background:#f44">Apagar</button></div>`:''}</div>`;
+   area.appendChild(c);
   });
+ });
 }
 
-// EDITAR
-function editar(id){
-  db.ref('cadastros/' + id).once('value', snap => {
-    let p = snap.val();
-    if(!p) return;
+// ===== CRUD =====
+form.onsubmit=e=>{e.preventDefault();let id=editarId||Date.now().toString();let file=foto.files[0];let r=new FileReader();function salvar(img){db.ref('cadastros/'+id).set({id,nome:nome.value,cpf:cpf.value,idade:idade.value,altura:altura.value,sangue:sangue.value,obs:obs.value,foto:img});form.reset();editarId=null;salvarBtn.innerText='Salvar';}
+ if(file){r.onload=()=>salvar(r.result);r.readAsDataURL(file);} else salvar('');}
 
-    nome.value = p.nome;
-    cpf.value = p.cpf;
-    idade.value = p.idade;
-    altura.value = p.altura;
-    sangue.value = p.sangue;
-    obs.value = p.obs;
+function editar(id){db.ref('cadastros/'+id).once('value',s=>{let p=s.val();nome.value=p.nome;cpf.value=p.cpf;idade.value=p.idade;altura.value=p.altura;sangue.value=p.sangue;obs.value=p.obs;editarId=id;salvarBtn.innerText='Salvar alteração';})}
+function apagar(id){db.ref('cadastros/'+id).remove()}
 
-    editarId = id;
-    salvarBtn.textContent = 'Salvar alteração';
-    cancelarEdit.style.display = 'inline-block';
-    window.scrollTo({top:0,behavior:'smooth'});
-  });
-}
+apagarTudo.onclick=()=>{if(confirm('Apagar tudo?'))db.ref('cadastros').remove()}
+buscar.onkeyup=render;
 
-cancelarEdit.onclick = () => {
-  form.reset();
-  editarId = null;
-  cancelarEdit.style.display = 'none';
-  salvarBtn.textContent = 'Salvar';
-};
-
-// APAGAR
-function apagar(id){
-  if(confirm('Deseja apagar este cadastro?')){
-    db.ref('cadastros/' + id).remove();
-    render();
-  }
-}
-
-// APAGAR TODOS
-document.getElementById('apagarTudo').onclick = () => {
-  if(confirm('Deseja apagar TODOS os cadastros?')){
-    db.ref('cadastros').remove();
-    render();
-  }
-};
-
-// SALVAR
-form.onsubmit = function(e){
-  e.preventDefault();
-  let file = foto.files[0];
-  let reader = new FileReader();
-
-  function salvar(img){
-    let data = {
-      id: editarId || Date.now().toString(),
-      nome: nome.value,
-      cpf: cpf.value,
-      idade: idade.value,
-      altura: altura.value,
-      sangue: sangue.value,
-      obs: obs.value,
-      foto: img || ''
-    };
-
-    db.ref('cadastros/' + data.id).set(data);
-    form.reset();
-    cancelarEdit.style.display = 'none';
-    salvarBtn.textContent = 'Salvar';
-    editarId = null;
-    render();
-  }
-
-  if(file){
-    reader.onload = () => salvar(reader.result);
-    reader.readAsDataURL(file);
-  } else salvar('');
-};
-
-// EXPORTAR
-function exportarExcel(){
-  db.ref('cadastros').once('value', snap => {
-    let dados = Object.values(snap.val() || {});
-
-    let tabela = '<table border=1><tr><th>Nome</th><th>CPF</th><th>Idade</th><th>Altura</th><th>Sangue</th><th>Obs</th></tr>';
-    dados.forEach(p=>{
-      tabela += `<tr><td>${p.nome||''}</td><td>${p.cpf||''}</td><td>${p.idade||''}</td><td>${p.altura||''}</td><td>${p.sangue||''}</td><td>${p.obs||''}</td></tr>`;
-    });
-    tabela += '</table>';
-
-    let a = document.createElement('a');
-    a.href = 'data:application/vnd.ms-excel,' + encodeURIComponent(tabela);
-    a.download = 'backup.xls';
-    a.click();
-  });
-}
-
-render();
+function exportarExcel(){let t='<table border=1><tr><th>Nome</th><th>CPF</th><th>Idade</th><th>Altura</th><th>Sangue</th><th>Obs</th></tr>';db.ref('cadastros').once('value',s=>{Object.values(s.val()||{}).forEach(p=>{t+=`<tr><td>${p.nome||''}</td><td>${p.cpf||''}</td><td>${p.idade||''}</td><td>${p.altura||''}</td><td>${p.sangue||''}</td><td>${p.obs||''}</td></tr>`});let a=document.createElement('a');a.href='data:application/vnd.ms-excel,'+encodeURIComponent(t);a.download='backup.xls';a.click();})}
 </script>
 </body></html>
-
